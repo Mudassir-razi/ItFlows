@@ -1,9 +1,9 @@
 //showman stuff
-int count = 30;    //number of lines
+int count = 80;    //number of lines
 float space;
 
 //calculation variables
-float del = 0.2;
+float del = 0.01;
 float k, omega1, omega2;
 float x[];
 float y[];
@@ -26,8 +26,7 @@ float map_minV = 0;
 float map_maxV = 13;
 int rMax, rMin, gMax, gMin, bMax, bMin;
 float minResetTime = 500;
-float delTime1 = 0, delTime2 = 0;
-float prevDelTime = 0;
+float timeResetCounter = 0;
 boolean bgReset = false;
 
 //menu stuff
@@ -37,16 +36,25 @@ ArrayList<String> statement;
 ArrayList<String> funny;
 String currentStr;
 boolean savingNow = false;
-float delTime;
-float prevTime;
-float maxTime = 3000;
 
+//time keeping
+float delTime = 0;      //universal delta time
+float prevTime = 0;    //universal
+
+
+//anim speed stuff
+float maxDel = 0.4;
+float minDel = 0.005;
+float delDel = 0.01;
+float minDelChangeTime = 200;  //minimum response time of delta. I.E. slowmo control stuff
+float timeDelCounter = 0;
 void setup()
 {
   fullScreen();
+
   y_max = x_max * displayHeight/displayWidth;
   y_min = -y_max;
-  
+
   statement = new ArrayList<String>();
   funny = new ArrayList<String>();
 
@@ -79,7 +87,9 @@ void setup()
 
 void draw()
 { 
-  delTime2 = millis();
+  delTime = millis() - prevTime;  //time from last frame
+  prevTime = millis();
+
   if (bgReset)
   {
     background(max(gMax, gMin)- min(gMax, gMin), 42, 22);
@@ -89,20 +99,25 @@ void draw()
 
   if (!resetting) {
     for (int i = 0; i < count * 4; i++) { 
-      if (mousePressed && delTime2 - delTime1 >= minResetTime) {
-        delTime1 = millis();
+
+      //reset control
+      if (mousePressed && timeResetCounter >= minResetTime) {
+        timeResetCounter = 0;
         thread("reset");
         resetting = true;
         currentStr = getText();
         break;
       }
+
+      //key control
       if (keyPressed)
       {
-        if (key == 'c' && !savingNow)
-        {
-          savingNow = true;
-          thread("saveImage");
-        }
+        //  if (key == 'c' && !savingNow)
+        //  {
+        //    savingNow = true;
+        //    thread("saveImage");
+        //  }
+        KeyPressed();
       }
       float x_map = map(x[i], x_min, x_max, 0, width - menuWidth);
       float y_map = map(y[i], y_min, y_max, 0, height);
@@ -118,7 +133,7 @@ void draw()
 
       stroke(c);
       //strokeWeight(5 * exp(- millis()/tau));
-      strokeWeight(2);
+      strokeWeight(1);
       line(prev_x_map[i], prev_y_map[i], x_map, y_map);
 
 
@@ -128,26 +143,20 @@ void draw()
       y[i] = y[i] + evalY(x[i], y[i]) * del;
       x[i] = x[i] + evalX(x[i], y[i]) * del;
     }
+    timeResetCounter += delTime;
+    timeDelCounter += delTime;
   }
 
   //adding helper texts
   textSize(13);
-  
+
   if (!savingNow) {
-      fill(50,10);
-      text(currentStr, 5, displayHeight - 5);
+    fill(50, 10);
+    text(currentStr, 5, displayHeight - 5);
   }
 }
 
-//for independent x
-float eval(float x, float y)
-{
-  //EDIT THE FUNCTION HERE
-  float dy_dx = ((1-0.8) * sin(y) - 0.8 * cos(x))/((1-0.8) * sin(x) + 0.8 * sin(y));
-
-  return dy_dx;
-}
-
+//resets every time mouse is clicked
 void reset()
 {
   //randomizing stuff
@@ -206,13 +215,42 @@ void reset()
   resetting = false;
 }
 
+//keycontrol
+void KeyPressed()
+{
+  if (key == 'c' && !savingNow)
+  {
+    savingNow = true;
+    thread("saveImage");
+  }
+
+  if (key == 'w' && timeDelCounter > minDelChangeTime)
+  {
+    del += delDel;
+    timeDelCounter = 0;
+  }
+
+  if (key == 's' && timeDelCounter > minDelChangeTime)
+  {
+    del -= delDel;
+    timeDelCounter = 0;
+  }
+
+  //clamping delta value
+  if (del > maxDel)del = maxDel;
+  if (del < minDel)del = minDel;
+}
+
+//UI talks
 void SetStatement()
 {
   statement.add("Press C to save image");
   statement.add("Esc to quit");
   statement.add("mouse click for new pattern");
+  statement.add("W to speedup, S to slow down");
 }
 
+//say someting funny
 void SetFunny()
 {
   funny.add("i hope u like math..");
@@ -227,11 +265,13 @@ void SetFunny()
   funny.add("DOOpe..");
 }
 
+
+//returns a random text from two types of texts
 String getText()
 {
   float i = random(0, 1);
   int index;
-  if(i > 0.95)
+  if (i > 0.95)
   {
     index = (int)random(0, funny.size());
     return funny.get(index);
@@ -240,6 +280,8 @@ String getText()
   return statement.get(index);
 }
 
+//saves image
+//should run on a different thread
 void saveImage()
 {
   String date = Integer.toString(day()) + Integer.toString(month()) + Integer.toString(year());
@@ -251,6 +293,7 @@ void saveImage()
   savingNow = false;
 }
 
+//math stuff
 //for dependent x and y
 float evalX(float x, float y)
 {
